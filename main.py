@@ -52,12 +52,16 @@ item_map = np.load(os.path.join(data_dir, 'item_map.npy'), allow_pickle=True).it
 warm_items_raw = np.load(os.path.join(data_dir, 'warm_item.npy'), allow_pickle=True)
 cold_items_raw = np.load(os.path.join(data_dir, 'cold_item.npy'), allow_pickle=True)
 
-# Convert sets to integer arrays
-warm_items = np.array(list(warm_items_raw), dtype=np.int64)  # Convert set to list, then to int64 array
-cold_items = np.array(list(cold_items_raw), dtype=np.int64)  # Same for cold items
-print("warm_items_raw type:", type(warm_items_raw), "content:", warm_items_raw)
+# Convert 0-d array containing a set to an integer array
+warm_items_set = warm_items_raw.item() if warm_items_raw.shape == () else warm_items_raw  # Extract set if 0-d
+cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_items_raw  # Same for cold
+warm_items = np.array(list(warm_items_set), dtype=np.int64)  # Convert set to list, then to int64 array
+cold_items = np.array(list(cold_items_set), dtype=np.int64)  # Same for cold items
+print("warm_items_raw type:", type(warm_items_raw), "shape:", warm_items_raw.shape, "content:", warm_items_raw)
+print("warm_items_set type:", type(warm_items_set), "content:", warm_items_set)
 print("warm_items type:", type(warm_items), "content:", warm_items)
-print("cold_items_raw type:", type(cold_items_raw), "content:", cold_items_raw)
+print("cold_items_raw type:", type(cold_items_raw), "shape:", cold_items_raw.shape, "content:", cold_items_raw)
+print("cold_items_set type:", type(cold_items_set), "content:", cold_items_set)
 print("cold_items type:", type(cold_items), "content:", cold_items)
 
 training_dict = np.load(os.path.join(data_dir, 'training_dict.npy'), allow_pickle=True).item()
