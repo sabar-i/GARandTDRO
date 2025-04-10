@@ -8,8 +8,8 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 from pprint import pprint
-from GAR.GAR import GAR  # Import the GAR class from GAR/GAR.py
-from sklearn.cluster import KMeans  # Add this import back
+from GAR.GAR import GAR
+from sklearn.cluster import KMeans
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=42)
@@ -52,11 +52,11 @@ item_map = np.load(os.path.join(data_dir, 'item_map.npy'), allow_pickle=True).it
 warm_items_raw = np.load(os.path.join(data_dir, 'warm_item.npy'), allow_pickle=True)
 cold_items_raw = np.load(os.path.join(data_dir, 'cold_item.npy'), allow_pickle=True)
 
-# Convert 0-d array containing a set to an integer array
+# Convert 0-d array containing a set to an integer array and validate against item_map
 warm_items_set = warm_items_raw.item() if warm_items_raw.shape == () else warm_items_raw
 cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_items_raw
-warm_items = np.array(list(warm_items_set), dtype=np.int64)
-cold_items = np.array(list(cold_items_set), dtype=np.int64)
+warm_items = np.array([item_map.get(i, 0) for i in list(warm_items_set)], dtype=np.int64)  # Map to valid indices
+cold_items = np.array([item_map.get(i, 0) for i in list(cold_items_set)], dtype=np.int64)  # Map to valid indices
 
 training_dict = np.load(os.path.join(data_dir, 'training_dict.npy'), allow_pickle=True).item()
 validation_cold_dict = np.load(os.path.join(data_dir, 'validation_cold_dict.npy'), allow_pickle=True).item()
@@ -131,7 +131,7 @@ exclude_test_cold = get_exclude_pair_count(para_dict['cold_test_user'][:args.n_t
 exclude_test_hybrid = get_exclude_pair_count(para_dict['hybrid_test_user'][:args.n_test_user], para_dict['hybrid_test_user_nb'], args.test_batch_us)
 
 # Model setup
-model = GAR(emb.shape[-1], content_data.shape[-1], args)  # Instantiate GAR class
+model = GAR(emb.shape[-1], content_data.shape[-1], args)
 save_dir = '/kaggle/working/GAR/model_save/'
 os.makedirs(save_dir, exist_ok=True)
 save_path = save_dir + args.dataset + '-' + args.model + '-'
@@ -156,6 +156,9 @@ for epoch in range(1, args.max_epoch + 1):
         batch_count += 1
         t_train_begin = time.time()
         batch_lbs = train_input[beg:end]
+        # Clip or validate item indices to prevent out-of-bounds errors
+        batch_lbs[:, 1] = np.clip(batch_lbs[:, 1], 0, item_node_num - 1)  # Ensure indices are within bounds
+        batch_lbs[:, 2] = np.clip(batch_lbs[:, 2], 0, item_node_num - 1)  # Same for negative samples
         batch_group_ids = np.array([group_map.get(int(item), 0) for item in batch_lbs[:, 1]])
         period_grads = np.zeros(model.emb_dim)
 
