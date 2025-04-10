@@ -8,7 +8,7 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 from pprint import pprint
-from GAR import GAR
+from GAR import GAR  # Import the GAR class
 from sklearn.cluster import KMeans
 
 parser = argparse.ArgumentParser()
@@ -53,10 +53,10 @@ warm_items_raw = np.load(os.path.join(data_dir, 'warm_item.npy'), allow_pickle=T
 cold_items_raw = np.load(os.path.join(data_dir, 'cold_item.npy'), allow_pickle=True)
 
 # Convert 0-d array containing a set to an integer array
-warm_items_set = warm_items_raw.item() if warm_items_raw.shape == () else warm_items_raw  # Extract set if 0-d
-cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_items_raw  # Same for cold
-warm_items = np.array(list(warm_items_set), dtype=np.int64)  # Convert set to list, then to int64 array
-cold_items = np.array(list(cold_items_set), dtype=np.int64)  # Same for cold items
+warm_items_set = warm_items_raw.item() if warm_items_raw.shape == () else warm_items_raw
+cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_items_raw
+warm_items = np.array(list(warm_items_set), dtype=np.int64)
+cold_items = np.array(list(cold_items_set), dtype=np.int64)
 print("warm_items_raw type:", type(warm_items_raw), "shape:", warm_items_raw.shape, "content:", warm_items_raw)
 print("warm_items_set type:", type(warm_items_set), "content:", warm_items_set)
 print("warm_items type:", type(warm_items), "content:", warm_items)
@@ -100,7 +100,7 @@ E = 3
 warm_features = content_data[warm_items]
 kmeans = KMeans(n_clusters=K, random_state=args.seed)
 group_labels = kmeans.fit_predict(warm_features)
-group_map = {int(item): label for item, label in zip(warm_items, group_labels)}  # Ensure int keys
+group_map = {int(item): label for item, label in zip(warm_items, group_labels)}
 
 interactions = []
 for uid, items in training_dict.items():
@@ -137,7 +137,7 @@ exclude_test_cold = get_exclude_pair_count(para_dict['cold_test_user'][:args.n_t
 exclude_test_hybrid = get_exclude_pair_count(para_dict['hybrid_test_user'][:args.n_test_user], para_dict['hybrid_test_user_nb'], args.test_batch_us)
 
 # Model setup
-model = eval(args.model)(emb.shape[-1], content_data.shape[-1], args)
+model = GAR(emb.shape[-1], content_data.shape[-1], args)  # Directly instantiate GAR class
 save_dir = '/kaggle/working/GAR/model_save/'
 os.makedirs(save_dir, exist_ok=True)
 save_path = save_dir + args.dataset + '-' + args.model + '-'
@@ -162,7 +162,7 @@ for epoch in range(1, args.max_epoch + 1):
         batch_count += 1
         t_train_begin = time.time()
         batch_lbs = train_input[beg:end]
-        batch_group_ids = np.array([group_map.get(int(item), 0) for item in batch_lbs[:, 1]])  # Ensure int keys
+        batch_group_ids = np.array([group_map.get(int(item), 0) for item in batch_lbs[:, 1]])
         period_grads = np.zeros(model.emb_dim)
 
         d_loss = model.train_d(user_emb[batch_lbs[:, 0]], item_emb[batch_lbs[:, 1]], item_emb[batch_lbs[:, 2]],
