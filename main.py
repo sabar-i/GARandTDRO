@@ -28,8 +28,8 @@ parser.add_argument('--max_epoch', type=int, default=1000)
 parser.add_argument('--restore', type=str, default="")
 parser.add_argument('--patience', type=int, default=10)
 parser.add_argument('--model', type=str, default='GAR')
-parser.add_argument('--alpha', type=float, default=0.5)  # Adversarial loss coeff for Amazon
-parser.add_argument('--beta', type=float, default=0.6)   # Interaction prediction coeff for Amazon
+parser.add_argument('--alpha', type=float, default=0.5)
+parser.add_argument('--beta', type=float, default=0.6)
 args = parser.parse_args([])
 args.datadir = "/kaggle/input/amazon"
 args.Ks = eval(args.Ks)
@@ -42,15 +42,24 @@ pprint(vars(args))
 timer = utils.Timer(name='main')
 ndcg.init(args)
 
-# Load dataset with allow_pickle=True for all .npy files
+# Load dataset
 data_dir = args.datadir
 content_data = np.load(os.path.join(data_dir, 'all_item_feature.npy'))
 content_data = np.concatenate([np.zeros([1, content_data.shape[-1]]), content_data], axis=0)
 emb = np.load(os.path.join(data_dir, 'all_item_embedding.npy'))
 user_map = np.load(os.path.join(data_dir, 'user_map.npy'), allow_pickle=True).item()
 item_map = np.load(os.path.join(data_dir, 'item_map.npy'), allow_pickle=True).item()
-warm_items = np.load(os.path.join(data_dir, 'warm_item.npy'), allow_pickle=True)
-cold_items = np.load(os.path.join(data_dir, 'cold_item.npy'), allow_pickle=True)
+warm_items_raw = np.load(os.path.join(data_dir, 'warm_item.npy'), allow_pickle=True)
+cold_items_raw = np.load(os.path.join(data_dir, 'cold_item.npy'), allow_pickle=True)
+
+# Convert to integer arrays and debug
+warm_items = np.array(warm_items_raw, dtype=np.int64)
+cold_items = np.array(cold_items_raw, dtype=np.int64)
+print("warm_items_raw type:", type(warm_items_raw), "content:", warm_items_raw)
+print("warm_items type:", type(warm_items), "content:", warm_items)
+print("cold_items_raw type:", type(cold_items_raw), "content:", cold_items_raw)
+print("cold_items type:", type(cold_items), "content:", cold_items)
+
 training_dict = np.load(os.path.join(data_dir, 'training_dict.npy'), allow_pickle=True).item()
 validation_cold_dict = np.load(os.path.join(data_dir, 'validation_cold_dict.npy'), allow_pickle=True).item()
 validation_warm_dict = np.load(os.path.join(data_dir, 'validation_warm_dict.npy'), allow_pickle=True).item()
@@ -87,7 +96,7 @@ E = 3
 warm_features = content_data[warm_items]
 kmeans = KMeans(n_clusters=K, random_state=args.seed)
 group_labels = kmeans.fit_predict(warm_features)
-group_map = {item: label for item, label in zip(warm_items, group_labels)}
+group_map = {int(item): label for item, label in zip(warm_items, group_labels)}  # Ensure int keys
 
 interactions = []
 for uid, items in training_dict.items():
@@ -149,7 +158,7 @@ for epoch in range(1, args.max_epoch + 1):
         batch_count += 1
         t_train_begin = time.time()
         batch_lbs = train_input[beg:end]
-        batch_group_ids = np.array([group_map.get(item, 0) for item in batch_lbs[:, 1]])
+        batch_group_ids = np.array([group_map.get(int(item), 0) for item in batch_lbs[:, 1]])  # Ensure int keys
         period_grads = np.zeros(model.emb_dim)
 
         d_loss = model.train_d(user_emb[batch_lbs[:, 0]], item_emb[batch_lbs[:, 1]], item_emb[batch_lbs[:, 2]],
