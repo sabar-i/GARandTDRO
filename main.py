@@ -52,9 +52,9 @@ item_map = np.load(os.path.join(data_dir, 'item_map.npy'), allow_pickle=True).it
 warm_items_raw = np.load(os.path.join(data_dir, 'warm_item.npy'), allow_pickle=True)
 cold_items_raw = np.load(os.path.join(data_dir, 'cold_item.npy'), allow_pickle=True)
 
-# Convert to integer arrays and debug
-warm_items = np.array(warm_items_raw, dtype=np.int64)
-cold_items = np.array(cold_items_raw, dtype=np.int64)
+# Convert sets to integer arrays
+warm_items = np.array(list(warm_items_raw), dtype=np.int64)  # Convert set to list, then to int64 array
+cold_items = np.array(list(cold_items_raw), dtype=np.int64)  # Same for cold items
 print("warm_items_raw type:", type(warm_items_raw), "content:", warm_items_raw)
 print("warm_items type:", type(warm_items), "content:", warm_items)
 print("cold_items_raw type:", type(cold_items_raw), "content:", cold_items_raw)
