@@ -1,22 +1,21 @@
+# main.py
 import os
 from metric import ndcg
 import utils
 import time
-import pickle
 import argparse
 import tensorflow as tf
 import numpy as np
 import pandas as pd
 from pprint import pprint
-from GAR.GAR import GAR
+from GAR import GAR
 from sklearn.cluster import KMeans
 
-# Argument parser (adapted for Kaggle notebook)
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=42)
 parser.add_argument('--gpu_id', type=int, default=0)
-parser.add_argument('--datadir', type=str, default="/kaggle/input/amazon", help='Kaggle input directory')
-parser.add_argument('--dataset', type=str, default="Amazon", help='Dataset to use')
+parser.add_argument('--datadir', type=str, default="/kaggle/input/amazon")
+parser.add_argument('--dataset', type=str, default="Amazon")
 parser.add_argument('--val_interval', type=float, default=1)
 parser.add_argument('--val_start', type=int, default=0)
 parser.add_argument('--test_batch_us', type=int, default=200)
@@ -28,27 +27,26 @@ parser.add_argument('--train_set', type=str, default='map')
 parser.add_argument('--max_epoch', type=int, default=1000)
 parser.add_argument('--restore', type=str, default="")
 parser.add_argument('--patience', type=int, default=10)
-parser.add_argument('--model', type=str, default='gar')
-parser.add_argument('--alpha', type=float, default=0.5, help='Adversarial loss coefficient')  # TDRO Amazon
-parser.add_argument('--beta', type=float, default=0.6, help='Interaction prediction coefficient')  # TDRO Amazon
-args = parser.parse_args([])  # Empty args for notebook; override below if needed
-
-# Environment setup for Kaggle
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+parser.add_argument('--model', type=str, default='GAR')
+parser.add_argument('--alpha', type=float, default=0.5)
+parser.add_argument('--beta', type=float, default=0.6)
+args = parser.parse_args([])
+args.datadir = "/kaggle/input/amazon"
 args.Ks = eval(args.Ks)
 args.model = args.model.upper()
+
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
 utils.set_seed_tf(args.seed)
 pprint(vars(args))
 timer = utils.Timer(name='main')
 ndcg.init(args)
 
-# Load Amazon dataset from Kaggle
-data_dir = args.datadir  # "/kaggle/input/amazon"
-content_data = np.load(os.path.join(data_dir, 'all_item_feature.npy'))  # Item content features
-content_data = np.concatenate([np.zeros([1, content_data.shape[-1]]), content_data], axis=0)  # Padding
-emb = np.load(os.path.join(data_dir, 'all_item_embedding.npy'))  # Pre-trained embeddings
+# Load dataset
+data_dir = args.datadir
+content_data = np.load(os.path.join(data_dir, 'all_item_feature.npy'))
+content_data = np.concatenate([np.zeros([1, content_data.shape[-1]]), content_data], axis=0)
+emb = np.load(os.path.join(data_dir, 'all_item_embedding.npy'))
 user_map = np.load(os.path.join(data_dir, 'user_map.npy'), allow_pickle=True).item()
 item_map = np.load(os.path.join(data_dir, 'item_map.npy'), allow_pickle=True).item()
 warm_items = np.load(os.path.join(data_dir, 'warm_item.npy'))
@@ -60,11 +58,10 @@ testing_cold_dict = np.load(os.path.join(data_dir, 'testing_cold_dict.npy'), all
 testing_warm_dict = np.load(os.path.join(data_dir, 'testing_warm_dict.npy'), allow_pickle=True).item()
 interaction_timestamp_dict = np.load(os.path.join(data_dir, 'interaction_timestamp_dict.npy'), allow_pickle=True).item()
 
-# Construct para_dict
 user_node_num = len(user_map) + 1
 item_node_num = len(item_map) + 1
-user_emb = emb[:user_node_num]  # Assuming first part is user embeddings
-item_emb = emb[user_node_num:user_node_num + item_node_num]  # Remaining are item embeddings
+user_emb = emb[:user_node_num]
+item_emb = emb[user_node_num:user_node_num + item_node_num]
 para_dict = {
     'user_array': np.arange(user_node_num - 1),
     'item_array': np.arange(item_node_num - 1),
@@ -85,17 +82,16 @@ para_dict = {
 timer.logging('Data loaded from {}'.format(data_dir))
 
 # TDRO Preprocessing
-K = 3  # Amazon-specific from TDRO paper
-E = 3  # Amazon-specific from TDRO paper
+K = 3
+E = 3
 warm_features = content_data[warm_items]
 kmeans = KMeans(n_clusters=K, random_state=args.seed)
 group_labels = kmeans.fit_predict(warm_features)
 group_map = {item: label for item, label in zip(warm_items, group_labels)}
 
-# Temporal splits
 interactions = []
 for uid, items in training_dict.items():
-    timestamps = interaction_timestamp_dict.get(uid, [0] * len(items))  # Default to 0 if missing
+    timestamps = interaction_timestamp_dict.get(uid, [0] * len(items))
     for iid, ts in zip(items, timestamps):
         interactions.append((uid, iid, ts))
 interactions = pd.DataFrame(interactions, columns=['user_id', 'item_id', 'timestamp'])
@@ -103,7 +99,6 @@ interactions = interactions.sort_values('timestamp')
 period_size = len(interactions) // E
 periods = [interactions.iloc[i:i + period_size] for i in range(0, len(interactions), period_size)]
 
-# Exclude pairs
 def get_exclude_pair(u_pair, ts_nei):
     pos_item = np.array(sorted(list(set(para_dict['pos_user_nb'][u_pair[0]]) - set(ts_nei[u_pair[0]]))), dtype=np.int64)
     pos_user = np.array([u_pair[1]] * len(pos_item), dtype=np.int64)
@@ -129,21 +124,15 @@ exclude_test_cold = get_exclude_pair_count(para_dict['cold_test_user'][:args.n_t
 exclude_test_hybrid = get_exclude_pair_count(para_dict['hybrid_test_user'][:args.n_test_user], para_dict['hybrid_test_user_nb'], args.test_batch_us)
 
 # Model setup
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
-sess = tf.Session(config=config)
-model = eval(args.model)(sess, args, emb.shape[-1], content_data.shape[-1])
-
-# Save model in Kaggle working directory
+model = eval(args.model)(emb.shape[-1], content_data.shape[-1], args)
 save_dir = '/kaggle/working/GAR/model_save/'
 os.makedirs(save_dir, exist_ok=True)
 save_path = save_dir + args.dataset + '-' + args.model + '-'
 param_file = time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
 save_file = save_path + param_file
 args.param_file = param_file
-saver = tf.train.Saver()
 
-# Training loop with TDRO
+# Training loop
 patience_count = 0
 va_metric_max = 0
 train_time = 0
@@ -160,9 +149,7 @@ for epoch in range(1, args.max_epoch + 1):
         batch_count += 1
         t_train_begin = time.time()
         batch_lbs = train_input[beg:end]
-        batch_group_ids = [group_map.get(item, 0) for item in batch_lbs[:, 1]]  # Default to group 0 if not warm
-
-        # Placeholder for period gradients
+        batch_group_ids = np.array([group_map.get(item, 0) for item in batch_lbs[:, 1]])
         period_grads = np.zeros(model.emb_dim)
 
         d_loss = model.train_d(user_emb[batch_lbs[:, 0]], item_emb[batch_lbs[:, 1]], item_emb[batch_lbs[:, 2]],
@@ -186,7 +173,7 @@ for epoch in range(1, args.max_epoch + 1):
             va_metric_current = va_metric['ndcg'][0]
             if va_metric_current > va_metric_max:
                 va_metric_max = va_metric_current
-                saver.save(sess, save_file)
+                model.save_weights(save_file)
                 patience_count = 0
             else:
                 patience_count += 1
@@ -198,7 +185,7 @@ for epoch in range(1, args.max_epoch + 1):
                           (epoch, patience_count, args.patience, loss, va_metric_current, va_metric_max, train_time, val_time))
 
 # Testing
-saver.restore(sess, save_file)
+model.load_weights(save_file)
 gen_user_emb = model.get_user_emb(user_emb)
 gen_item_emb = model.get_item_emb(content_data, item_emb, para_dict['warm_item'], para_dict['cold_item'])
 cold_res, _ = ndcg.test(model.get_ranked_rating,
@@ -228,7 +215,7 @@ hybrid_res, _ = ndcg.test(model.get_ranked_rating,
 timer.logging("Hybrid result@{}: PRE, REC, NDCG: {:.4f}, {:.4f}, {:.4f}".format(
     args.Ks[0], hybrid_res['precision'][0], hybrid_res['recall'][0], hybrid_res['ndcg'][0]))
 
-# Save results in Kaggle working directory
+# Save results
 result_file = '/kaggle/working/GAR/result/'
 os.makedirs(result_file, exist_ok=True)
 with open(result_file + f'{args.model}.txt', 'a') as f:
@@ -243,4 +230,3 @@ with open(result_file + f'{args.model}.txt', 'a') as f:
     for i in range(len(args.Ks)):
         f.write('%.4f %.4f %.4f ' % (hybrid_res['precision'][i], hybrid_res['recall'][i], hybrid_res['ndcg'][i]))
     f.write('\n')
-sess.close()
