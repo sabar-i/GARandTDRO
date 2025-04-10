@@ -55,8 +55,14 @@ cold_items_raw = np.load(os.path.join(data_dir, 'cold_item.npy'), allow_pickle=T
 # Convert 0-d array containing a set to an integer array and validate against item_map
 warm_items_set = warm_items_raw.item() if warm_items_raw.shape == () else warm_items_raw
 cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_items_raw
-warm_items = np.array([item_map.get(i, 0) for i in list(warm_items_set) if i in item_map], dtype=np.int64)  # Only mapped IDs
-cold_items = np.array([item_map.get(i, 0) for i in list(cold_items_set) if i in item_map], dtype=np.int64)  # Only mapped IDs
+warm_items = np.array([item_map.get(i, 0) for i in list(warm_items_set) if i in item_map], dtype=np.int64)
+cold_items = np.array([item_map.get(i, 0) for i in list(cold_items_set) if i in item_map], dtype=np.int64)
+
+# Debug: Check if warm_items is empty
+if len(warm_items) == 0:
+    print(f"Warning: warm_items is empty after mapping. Raw items: {warm_items_set}")
+    print(f"Item map keys: {list(item_map.keys())[:10]}...")  # Show first 10 keys for debugging
+    warm_items = np.array(range(min(1, len(content_data) - 1)))  # Fallback: use first item(s) if empty
 
 # Load and remap training_dict and other dictionaries
 training_dict = np.load(os.path.join(data_dir, 'training_dict.npy'), allow_pickle=True).item()
@@ -66,7 +72,6 @@ testing_cold_dict = np.load(os.path.join(data_dir, 'testing_cold_dict.npy'), all
 testing_warm_dict = np.load(os.path.join(data_dir, 'testing_warm_dict.npy'), allow_pickle=True).item()
 interaction_timestamp_dict = np.load(os.path.join(data_dir, 'interaction_timestamp_dict.npy'), allow_pickle=True).item()
 
-# Remap item IDs in dictionaries using item_map
 def remap_items_dict(dict_data):
     return {k: [item_map.get(i, 0) for i in v if i in item_map] for k, v in dict_data.items()}
 
@@ -103,8 +108,12 @@ timer.logging('Data loaded from {}'.format(data_dir))
 K = 3
 E = 3
 warm_features = content_data[warm_items]
-kmeans = KMeans(n_clusters=K, random_state=args.seed, n_init='auto')  # Suppress n_init warning
-group_labels = kmeans.fit_predict(warm_features)
+if len(warm_features) == 0:
+    print("Warning: warm_features is empty. Skipping clustering or using fallback.")
+    group_labels = np.zeros(len(warm_items), dtype=int)  # Fallback: assign all to cluster 0
+else:
+    kmeans = KMeans(n_clusters=K, random_state=args.seed, n_init='auto')
+    group_labels = kmeans.fit_predict(warm_features)
 group_map = {int(item): label for item, label in zip(warm_items, group_labels)}
 
 interactions = []
