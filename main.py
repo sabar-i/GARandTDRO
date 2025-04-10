@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from pprint import pprint
 from GAR.GAR import GAR  # Import the GAR class from GAR/GAR.py
+from sklearn.cluster import KMeans  # Add this import back
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=42)
