@@ -8,8 +8,7 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 from pprint import pprint
-from GAR import GAR  # Import the GAR class
-from sklearn.cluster import KMeans
+from GAR.GAR import GAR  # Import the GAR class from GAR/GAR.py
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=42)
@@ -57,12 +56,6 @@ warm_items_set = warm_items_raw.item() if warm_items_raw.shape == () else warm_i
 cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_items_raw
 warm_items = np.array(list(warm_items_set), dtype=np.int64)
 cold_items = np.array(list(cold_items_set), dtype=np.int64)
-print("warm_items_raw type:", type(warm_items_raw), "shape:", warm_items_raw.shape, "content:", warm_items_raw)
-print("warm_items_set type:", type(warm_items_set), "content:", warm_items_set)
-print("warm_items type:", type(warm_items), "content:", warm_items)
-print("cold_items_raw type:", type(cold_items_raw), "shape:", cold_items_raw.shape, "content:", cold_items_raw)
-print("cold_items_set type:", type(cold_items_set), "content:", cold_items_set)
-print("cold_items type:", type(cold_items), "content:", cold_items)
 
 training_dict = np.load(os.path.join(data_dir, 'training_dict.npy'), allow_pickle=True).item()
 validation_cold_dict = np.load(os.path.join(data_dir, 'validation_cold_dict.npy'), allow_pickle=True).item()
@@ -137,7 +130,7 @@ exclude_test_cold = get_exclude_pair_count(para_dict['cold_test_user'][:args.n_t
 exclude_test_hybrid = get_exclude_pair_count(para_dict['hybrid_test_user'][:args.n_test_user], para_dict['hybrid_test_user_nb'], args.test_batch_us)
 
 # Model setup
-model = GAR(emb.shape[-1], content_data.shape[-1], args)  # Directly instantiate GAR class
+model = GAR(emb.shape[-1], content_data.shape[-1], args)  # Instantiate GAR class
 save_dir = '/kaggle/working/GAR/model_save/'
 os.makedirs(save_dir, exist_ok=True)
 save_path = save_dir + args.dataset + '-' + args.model + '-'
