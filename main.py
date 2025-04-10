@@ -28,8 +28,8 @@ parser.add_argument('--max_epoch', type=int, default=1000)
 parser.add_argument('--restore', type=str, default="")
 parser.add_argument('--patience', type=int, default=10)
 parser.add_argument('--model', type=str, default='GAR')
-parser.add_argument('--alpha', type=float, default=0.5)
-parser.add_argument('--beta', type=float, default=0.6)
+parser.add_argument('--alpha', type=float, default=0.5)  # Adversarial loss coeff for Amazon
+parser.add_argument('--beta', type=float, default=0.6)   # Interaction prediction coeff for Amazon
 args = parser.parse_args([])
 args.datadir = "/kaggle/input/amazon"
 args.Ks = eval(args.Ks)
@@ -42,15 +42,15 @@ pprint(vars(args))
 timer = utils.Timer(name='main')
 ndcg.init(args)
 
-# Load dataset
+# Load dataset with allow_pickle=True for all .npy files
 data_dir = args.datadir
 content_data = np.load(os.path.join(data_dir, 'all_item_feature.npy'))
 content_data = np.concatenate([np.zeros([1, content_data.shape[-1]]), content_data], axis=0)
 emb = np.load(os.path.join(data_dir, 'all_item_embedding.npy'))
 user_map = np.load(os.path.join(data_dir, 'user_map.npy'), allow_pickle=True).item()
 item_map = np.load(os.path.join(data_dir, 'item_map.npy'), allow_pickle=True).item()
-warm_items = np.load(os.path.join(data_dir, 'warm_item.npy'))
-cold_items = np.load(os.path.join(data_dir, 'cold_item.npy'))
+warm_items = np.load(os.path.join(data_dir, 'warm_item.npy'), allow_pickle=True)
+cold_items = np.load(os.path.join(data_dir, 'cold_item.npy'), allow_pickle=True)
 training_dict = np.load(os.path.join(data_dir, 'training_dict.npy'), allow_pickle=True).item()
 validation_cold_dict = np.load(os.path.join(data_dir, 'validation_cold_dict.npy'), allow_pickle=True).item()
 validation_warm_dict = np.load(os.path.join(data_dir, 'validation_warm_dict.npy'), allow_pickle=True).item()
