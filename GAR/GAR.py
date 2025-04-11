@@ -80,7 +80,7 @@ class GAR(tf.keras.Model):
         
         with tf.GradientTape() as tape:
             d_out = self.build_discriminator(uemb, iemb, training=True)
-            d_out = tf.reshape(d_out, [3, -1], transpose=True)
+            d_out = tf.reshape(d_out, [3, -1])
             real_logit = d_out[:, 0]
             neg_logit = d_out[:, 1]
             d_fake_logit = d_out[:, 2]
