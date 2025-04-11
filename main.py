@@ -43,6 +43,9 @@ timer = utils.Timer(name='main')
 ndcg.init(args)
 
 # Load dataset
+# ... (previous imports and parser setup remain unchanged)
+
+# Load dataset
 data_dir = args.datadir
 content_data = np.load(os.path.join(data_dir, 'all_item_feature.npy'))
 content_data = np.concatenate([np.zeros([1, content_data.shape[-1]]), content_data], axis=0)
@@ -57,18 +60,23 @@ warm_items_set = warm_items_raw.item() if warm_items_raw.shape == () else warm_i
 cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_items_raw
 
 # Debug: Check types and contents
-print(f"warm_items_raw type: {type(warm_items_raw)}, content: {warm_items_set if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
-print(f"cold_items_raw type: {type(cold_items_raw)}, content: {cold_items_set if hasattr(cold_items_set, '__len__') else [cold_items_set]}")
+print(f"warm_items_raw type: {type(warm_items_raw)}, content: {warm_items_set[:10] if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
+print(f"cold_items_raw type: {type(cold_items_raw)}, content: {cold_items_set[:10] if hasattr(cold_items_set, '__len__') else [cold_items_set]}")
 print(f"item_map type: {type(item_map)}, first 10 keys: {list(item_map.keys())[:10]}")
 
 # Apply CLCRec+TDRO offset (num_user = 21607 for Amazon)
 num_user = 21607
 num_item = 93755  # From CLCRec+TDRO Amazon config
 max_valid_index = num_item - 1  # 93754
+content_size = len(content_data) - 1  # 93755 (excluding zero row)
 
 # Validate and remap warm_items and cold_items with strict bounds checking
 warm_items = np.array([i + num_user for i in warm_items_set if 0 <= i <= max_valid_index], dtype=np.int64)
 cold_items = np.array([i + num_user for i in cold_items_set if 0 <= i <= max_valid_index], dtype=np.int64)
+
+# Additional validation: Ensure mapped indices are within content_data bounds
+warm_items = warm_items[(warm_items - num_user) < content_size]
+cold_items = cold_items[(cold_items - num_user) < content_size]
 
 # Debug output to verify
 print(f"Raw warm_items_set: {list(warm_items_set)[:10] if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
@@ -81,7 +89,10 @@ if len(warm_items) == 0:
 elif len(warm_items) < 3:
     print(f"Warning: warm_items has {len(warm_items)} samples, less than n_clusters=3. Using all available.")
 if len(cold_items) == 0:
-    print(f"Warning: cold_items is empty after mapping. Check cold_items_raw.")
+    print(f"Warning: cold_items is empty after mapping. Check cold_items_raw. Using fallback: [{num_user + 1}]")
+    cold_items = np.array([num_user + 1])  # Fallback to second offset item
+
+# ... (rest of the code, including remap_items_dict, para_dict, and training loop, remains unchanged)
 
 # Load and remap training_dict and other dictionaries with offset
 training_dict = np.load(os.path.join(data_dir, 'training_dict.npy'), allow_pickle=True).item()
