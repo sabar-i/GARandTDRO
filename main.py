@@ -55,13 +55,13 @@ item_map = np.load(os.path.join(data_dir, 'item_map.npy'), allow_pickle=True).it
 warm_items_raw = np.load(os.path.join(data_dir, 'warm_item.npy'), allow_pickle=True)
 cold_items_raw = np.load(os.path.join(data_dir, 'cold_item.npy'), allow_pickle=True)
 
-# Extract content from 0-dimensional arrays
-warm_items_set = warm_items_raw.item() if warm_items_raw.shape == () else warm_items_raw
-cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_items_raw
+# Extract content from 0-dimensional arrays and convert to list if needed
+warm_items_set = list(warm_items_raw.item() if warm_items_raw.shape == () else warm_items_raw)
+cold_items_set = list(cold_items_raw.item() if cold_items_raw.shape == () else cold_items_raw)
 
 # Debug: Check types and contents
-print(f"warm_items_raw type: {type(warm_items_raw)}, content: {warm_items_set[:10] if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
-print(f"cold_items_raw type: {type(cold_items_raw)}, content: {cold_items_set[:10] if hasattr(cold_items_set, '__len__') else [cold_items_set]}")
+print(f"warm_items_raw type: {type(warm_items_raw)}, content: {warm_items_set[:10] if len(warm_items_set) > 0 else [warm_items_set]}")
+print(f"cold_items_raw type: {type(cold_items_raw)}, content: {cold_items_set[:10] if len(cold_items_set) > 0 else [cold_items_set]}")
 print(f"item_map type: {type(item_map)}, first 10 keys: {list(item_map.keys())[:10]}")
 
 # Apply CLCRec+TDRO offset (num_user = 21607 for Amazon)
@@ -79,8 +79,8 @@ warm_items = warm_items[(warm_items - num_user) < content_size]
 cold_items = cold_items[(cold_items - num_user) < content_size]
 
 # Debug output to verify
-print(f"Raw warm_items_set: {list(warm_items_set)[:10] if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
-print(f"Raw cold_items_set: {list(cold_items_set)[:10] if hasattr(cold_items_set, '__len__') else [cold_items_set]}")
+print(f"Raw warm_items_set: {warm_items_set[:10] if len(warm_items_set) > 0 else [warm_items_set]}")
+print(f"Raw cold_items_set: {cold_items_set[:10] if len(cold_items_set) > 0 else [cold_items_set]}")
 print(f"Mapped warm_items: {warm_items[:10]} (length: {len(warm_items)})")
 print(f"Mapped cold_items: {cold_items[:10]} (length: {len(cold_items)})")
 if len(warm_items) == 0:
@@ -92,7 +92,7 @@ if len(cold_items) == 0:
     print(f"Warning: cold_items is empty after mapping. Check cold_items_raw. Using fallback: [{num_user + 1}]")
     cold_items = np.array([num_user + 1])  # Fallback to second offset item
 
-# ... (rest of the code, including remap_items_dict, para_dict, and training loop, remains unchanged)
+# ... (rest of the code remains unchanged)
 
 # Load and remap training_dict and other dictionaries with offset
 training_dict = np.load(os.path.join(data_dir, 'training_dict.npy'), allow_pickle=True).item()
