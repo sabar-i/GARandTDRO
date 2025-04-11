@@ -60,11 +60,15 @@ cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_i
 print(f"warm_items_raw type: {type(warm_items_raw)}, content: {warm_items_set if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
 print(f"item_map type: {type(item_map)}, first 10 keys: {list(item_map.keys())[:10]}")
 
-# Map warm_items and cold_items using item_map (assuming raw contains original IDs like ASINs)
-warm_items = np.array([item_map.get(str(i), 0) for i in warm_items_set if str(i) in item_map], dtype=np.int64)
-cold_items = np.array([item_map.get(str(i), 0) for i in cold_items_set if str(i) in item_map], dtype=np.int64)
+# Create reverse mapping (mapped index -> original ASIN)
+item_map_reverse = {v: k for k, v in item_map.items()}
 
-# Debug: Check if warm_items is empty or insufficient
+# Map warm_items and cold_items using reverse mapping (assuming raw contains mapped indices)
+warm_items = np.array([int(item_map_reverse.get(int(i), 0)) for i in warm_items_set], dtype=np.int64)
+cold_items = np.array([int(item_map_reverse.get(int(i), 0)) for i in cold_items_set], dtype=np.int64)
+
+# Debug: Check mapping results
+print(f"Mapped warm_items: {warm_items[:10]} (length: {len(warm_items)})")
 if len(warm_items) == 0:
     print(f"Warning: warm_items is empty after mapping. Raw items: {list(warm_items_set)[:10] if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
     warm_items = np.array([0])  # Fallback to first item
@@ -80,7 +84,7 @@ testing_warm_dict = np.load(os.path.join(data_dir, 'testing_warm_dict.npy'), all
 interaction_timestamp_dict = np.load(os.path.join(data_dir, 'interaction_timestamp_dict.npy'), allow_pickle=True).item()
 
 def remap_items_dict(dict_data):
-    return {k: [item_map.get(str(i), 0) for i in v if str(i) in item_map] for k, v in dict_data.items()}
+    return {k: [int(item_map_reverse.get(int(i), 0)) for i in v] for k, v in dict_data.items()}
 
 training_dict = remap_items_dict(training_dict)
 validation_cold_dict = remap_items_dict(validation_cold_dict)
@@ -127,6 +131,7 @@ else:
     group_labels = kmeans.fit_predict(warm_features)
 group_map = {int(item): label for item, label in zip(warm_items, group_labels)}
 
+# Handle empty interactions
 interactions = []
 for uid, items in training_dict.items():
     timestamps = interaction_timestamp_dict.get(uid, [0] * len(items))
@@ -134,8 +139,12 @@ for uid, items in training_dict.items():
         interactions.append((uid, iid, ts))
 interactions = pd.DataFrame(interactions, columns=['user_id', 'item_id', 'timestamp'])
 interactions = interactions.sort_values('timestamp')
-period_size = len(interactions) // E
-periods = [interactions.iloc[i:i + period_size] for i in range(0, len(interactions), period_size)]
+if len(interactions) > 0:
+    period_size = len(interactions) // E
+    periods = [interactions.iloc[i:i + period_size] for i in range(0, len(interactions), period_size)]
+else:
+    print("Warning: interactions is empty. Skipping TDRO period division.")
+    periods = []  # Empty list to avoid range error
 
 def get_exclude_pair(u_pair, ts_nei):
     pos_item = np.array(sorted(list(set(para_dict['pos_user_nb'][u_pair[0]]) - set(ts_nei[u_pair[0]]))), dtype=np.int64)
