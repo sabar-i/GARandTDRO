@@ -1,4 +1,3 @@
-
 # main.py
 import os
 from metric import ndcg
@@ -59,22 +58,30 @@ cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_i
 
 # Debug: Check types and contents
 print(f"warm_items_raw type: {type(warm_items_raw)}, content: {warm_items_set if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
+print(f"cold_items_raw type: {type(cold_items_raw)}, content: {cold_items_set if hasattr(cold_items_set, '__len__') else [cold_items_set]}")
 print(f"item_map type: {type(item_map)}, first 10 keys: {list(item_map.keys())[:10]}")
 
 # Apply CLCRec+TDRO offset (num_user = 21607 for Amazon)
 num_user = 21607
 num_item = 93755  # From CLCRec+TDRO Amazon config
 max_valid_index = num_item - 1  # 93754
-warm_items = np.array([i + num_user for i in warm_items_set if 0 <= i < max_valid_index], dtype=np.int64)
-cold_items = np.array([i + num_user for i in cold_items_set if 0 <= i < max_valid_index], dtype=np.int64)
 
-# Debug: Check mapping results
+# Validate and remap warm_items and cold_items with strict bounds checking
+warm_items = np.array([i + num_user for i in warm_items_set if 0 <= i <= max_valid_index], dtype=np.int64)
+cold_items = np.array([i + num_user for i in cold_items_set if 0 <= i <= max_valid_index], dtype=np.int64)
+
+# Debug output to verify
+print(f"Raw warm_items_set: {list(warm_items_set)[:10] if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
+print(f"Raw cold_items_set: {list(cold_items_set)[:10] if hasattr(cold_items_set, '__len__') else [cold_items_set]}")
 print(f"Mapped warm_items: {warm_items[:10]} (length: {len(warm_items)})")
+print(f"Mapped cold_items: {cold_items[:10]} (length: {len(cold_items)})")
 if len(warm_items) == 0:
-    print(f"Warning: warm_items is empty after mapping. Raw items: {list(warm_items_set)[:10] if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
+    print(f"Warning: warm_items is empty after mapping. Using fallback: [{num_user}]")
     warm_items = np.array([num_user])  # Fallback to first offset item
 elif len(warm_items) < 3:
     print(f"Warning: warm_items has {len(warm_items)} samples, less than n_clusters=3. Using all available.")
+if len(cold_items) == 0:
+    print(f"Warning: cold_items is empty after mapping. Check cold_items_raw.")
 
 # Load and remap training_dict and other dictionaries with offset
 training_dict = np.load(os.path.join(data_dir, 'training_dict.npy'), allow_pickle=True).item()
@@ -85,7 +92,7 @@ testing_warm_dict = np.load(os.path.join(data_dir, 'testing_warm_dict.npy'), all
 interaction_timestamp_dict = np.load(os.path.join(data_dir, 'interaction_timestamp_dict.npy'), allow_pickle=True).item()
 
 def remap_items_dict(dict_data):
-    return {k: [i + num_user for i in v if 0 <= i < max_valid_index] for k, v in dict_data.items()}
+    return {k: [i + num_user for i in v if 0 <= i <= max_valid_index] for k, v in dict_data.items()}
 
 training_dict = remap_items_dict(training_dict)
 validation_cold_dict = remap_items_dict(validation_cold_dict)
@@ -183,7 +190,6 @@ save_file = save_path + param_file
 args.param_file = param_file
 
 # Training loop
-# Training loop
 patience_count = 0
 va_metric_max = 0
 train_time = 0
@@ -230,7 +236,6 @@ for epoch in range(1, args.max_epoch + 1):
         train_time += t_train_end - t_train_begin
 
         # Validation logic remains the same...
-
         if (batch_count % int(n_batch * args.val_interval) == 0) and (epoch >= args.val_start):
             t_val_begin = time.time()
             gen_user_emb = model.get_user_emb(user_emb)
