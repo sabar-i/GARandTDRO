@@ -25,12 +25,17 @@ class GAR(tf.keras.Model):
         self.alpha = args.alpha  # 0.5
         self.beta = args.beta   # 0.6
 
-        # Generator and Discriminator layers
+        # Generator layers
         self.g_layers = [tf.keras.layers.Dense(units, activation=self.g_act,
                                                kernel_regularizer=tf.keras.regularizers.l2(1e-3),
                                                kernel_initializer='glorot_uniform')
                          for units in self.g_layer]
+        self.g_output_layer = tf.keras.layers.Dense(self.emb_dim, activation=None,
+                                                    kernel_regularizer=tf.keras.regularizers.l2(1e-3),
+                                                    kernel_initializer='glorot_uniform')
         self.g_dropout = tf.keras.layers.Dropout(self.g_drop)
+        
+        # Discriminator layers
         self.d_user_layers = [tf.keras.layers.Dense(units, activation=self.d_act,
                                                     kernel_regularizer=tf.keras.regularizers.l2(1e-3),
                                                     kernel_initializer='glorot_uniform')
@@ -55,7 +60,7 @@ class GAR(tf.keras.Model):
         for layer in self.g_layers:
             hidden = layer(hidden)
             hidden = self.g_dropout(hidden, training=training)
-        return hidden
+        return self.g_output_layer(hidden)
 
     def build_discriminator(self, uembs, iembs, training):
         u_hidden = uembs
