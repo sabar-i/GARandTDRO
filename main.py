@@ -52,17 +52,25 @@ item_map = np.load(os.path.join(data_dir, 'item_map.npy'), allow_pickle=True).it
 warm_items_raw = np.load(os.path.join(data_dir, 'warm_item.npy'), allow_pickle=True)
 cold_items_raw = np.load(os.path.join(data_dir, 'cold_item.npy'), allow_pickle=True)
 
-# Convert 0-d array containing a set to an integer array and validate against item_map
+# Convert 0-d array containing a set to a list and validate against item_map
 warm_items_set = warm_items_raw.item() if warm_items_raw.shape == () else warm_items_raw
 cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_items_raw
-warm_items = np.array([item_map.get(i, 0) for i in list(warm_items_set) if i in item_map], dtype=np.int64)
-cold_items = np.array([item_map.get(i, 0) for i in list(cold_items_set) if i in item_map], dtype=np.int64)
 
-# Debug: Check if warm_items is empty
+# Debug: Check types and contents
+print(f"warm_items_raw type: {type(warm_items_raw)}, content: {warm_items_raw[:10] if hasattr(warm_items_raw, '__len__') else warm_items_raw}")
+print(f"item_map type: {type(item_map)}, first 10 keys: {list(item_map.keys())[:10]}")
+
+# Map warm_items and cold_items using item_map (assuming raw contains original IDs like ASINs)
+warm_items = np.array([item_map.get(str(i), 0) for i in warm_items_set if str(i) in item_map], dtype=np.int64)
+cold_items = np.array([item_map.get(str(i), 0) for i in cold_items_set if str(i) in item_map], dtype=np.int64)
+
+# Debug: Check if warm_items is empty or insufficient
 if len(warm_items) == 0:
-    print(f"Warning: warm_items is empty after mapping. Raw items: {warm_items_set}")
-    print(f"Item map keys: {list(item_map.keys())[:10]}...")  # Show first 10 keys for debugging
-    warm_items = np.array(range(min(1, len(content_data) - 1)))  # Fallback: use first item(s) if empty
+    print(f"Warning: warm_items is empty after mapping. Raw items: {warm_items_set[:10] if hasattr(warm_items_set, '__len__') else warm_items_set}")
+    warm_items = np.array([0])  # Fallback to first item
+elif len(warm_items) < 3:
+    print(f"Warning: warm_items has {len(warm_items)} samples, less than n_clusters=3. Using all available.")
+    # No change, but will adjust clustering below
 
 # Load and remap training_dict and other dictionaries
 training_dict = np.load(os.path.join(data_dir, 'training_dict.npy'), allow_pickle=True).item()
@@ -73,7 +81,7 @@ testing_warm_dict = np.load(os.path.join(data_dir, 'testing_warm_dict.npy'), all
 interaction_timestamp_dict = np.load(os.path.join(data_dir, 'interaction_timestamp_dict.npy'), allow_pickle=True).item()
 
 def remap_items_dict(dict_data):
-    return {k: [item_map.get(i, 0) for i in v if i in item_map] for k, v in dict_data.items()}
+    return {k: [item_map.get(str(i), 0) for i in v if str(i) in item_map] for k, v in dict_data.items()}
 
 training_dict = remap_items_dict(training_dict)
 validation_cold_dict = remap_items_dict(validation_cold_dict)
@@ -111,6 +119,10 @@ warm_features = content_data[warm_items]
 if len(warm_features) == 0:
     print("Warning: warm_features is empty. Skipping clustering or using fallback.")
     group_labels = np.zeros(len(warm_items), dtype=int)  # Fallback: assign all to cluster 0
+elif len(warm_features) < K:
+    print(f"Warning: warm_features has {len(warm_features)} samples, less than n_clusters={K}. Reducing clusters to {len(warm_features)}.")
+    kmeans = KMeans(n_clusters=len(warm_features), random_state=args.seed, n_init='auto')
+    group_labels = kmeans.fit_predict(warm_features)
 else:
     kmeans = KMeans(n_clusters=K, random_state=args.seed, n_init='auto')
     group_labels = kmeans.fit_predict(warm_features)
