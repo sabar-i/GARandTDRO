@@ -77,7 +77,8 @@ class GAR(tf.keras.Model):
         gen_emb = self.build_generator(batch_content, training=True)
         uemb = tf.tile(batch_uemb, [3, 1])  # [3072, emb_dim]
         iemb = tf.concat([batch_iemb, batch_neg_iemb, gen_emb], axis=0)  # [3072, emb_dim]
-        
+        period_grads_broadcast = tf.reshape(period_grads, [self.emb_dim, 1])  # Reshape to [128, 1] for broadcasting
+    
         with tf.GradientTape() as tape:
             d_out = self.build_discriminator(uemb, iemb, training=True)  # [3072,]
             batch_size = tf.shape(batch_uemb)[0]  # 1024
@@ -94,24 +95,19 @@ class GAR(tf.keras.Model):
             d_group_losses = [tf.reduce_mean(tf.boolean_mask(d_loss_base, tf.equal(batch_group_ids, j)))
                               for j in range(self.K)]
             d_loss = tf.reduce_mean(d_loss_base) + tf.reduce_sum(self.losses)
-        
-            # Group-wise loss
-            d_group_losses = [tf.reduce_mean(tf.boolean_mask(d_loss_base, tf.equal(batch_group_ids, j)))
-                              for j in range(self.K)]
-            d_loss = tf.reduce_mean(d_loss_base) + tf.reduce_sum(self.losses)
-
+    
             # TDRO update
             scores = []
             d_vars = self.trainable_variables  # All trainable vars (approximation)
             for j in range(self.K):
-                g_j = tf.gradients(d_group_losses[j], d_vars)[0]
-                shift = tf.reduce_sum(g_j * period_grads) if g_j is not None else 0.0
+                g_j = tf.gradients(d_group_losses[j], d_vars)[0]  # Shape might be [128, 200] for a layer
+                shift = tf.reduce_sum(g_j * period_grads_broadcast) if g_j is not None else 0.0
                 score = (1 - self.lambda_) * d_group_losses[j] + self.lambda_ * shift
                 scores.append(score)
             scores = tf.stack(scores)
             w_new = tf.nn.softmax(tf.math.log(self.group_weights + 1e-9) + self.eta_w * scores)
             self.group_weights.assign(w_new)
-
+    
         grads = tape.gradient(d_loss, self.trainable_variables)
         self.d_optimizer.apply_gradients(zip(grads, self.trainable_variables))
         
