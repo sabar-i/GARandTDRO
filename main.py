@@ -52,12 +52,12 @@ item_map = np.load(os.path.join(data_dir, 'item_map.npy'), allow_pickle=True).it
 warm_items_raw = np.load(os.path.join(data_dir, 'warm_item.npy'), allow_pickle=True)
 cold_items_raw = np.load(os.path.join(data_dir, 'cold_item.npy'), allow_pickle=True)
 
-# Convert 0-d array containing a set to a list and validate against item_map
+# Extract content from 0-dimensional arrays
 warm_items_set = warm_items_raw.item() if warm_items_raw.shape == () else warm_items_raw
 cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_items_raw
 
 # Debug: Check types and contents
-print(f"warm_items_raw type: {type(warm_items_raw)}, content: {warm_items_raw[:10] if hasattr(warm_items_raw, '__len__') else warm_items_raw}")
+print(f"warm_items_raw type: {type(warm_items_raw)}, content: {warm_items_set if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
 print(f"item_map type: {type(item_map)}, first 10 keys: {list(item_map.keys())[:10]}")
 
 # Map warm_items and cold_items using item_map (assuming raw contains original IDs like ASINs)
@@ -66,11 +66,10 @@ cold_items = np.array([item_map.get(str(i), 0) for i in cold_items_set if str(i)
 
 # Debug: Check if warm_items is empty or insufficient
 if len(warm_items) == 0:
-    print(f"Warning: warm_items is empty after mapping. Raw items: {warm_items_set[:10] if hasattr(warm_items_set, '__len__') else warm_items_set}")
+    print(f"Warning: warm_items is empty after mapping. Raw items: {list(warm_items_set)[:10] if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
     warm_items = np.array([0])  # Fallback to first item
 elif len(warm_items) < 3:
     print(f"Warning: warm_items has {len(warm_items)} samples, less than n_clusters=3. Using all available.")
-    # No change, but will adjust clustering below
 
 # Load and remap training_dict and other dictionaries
 training_dict = np.load(os.path.join(data_dir, 'training_dict.npy'), allow_pickle=True).item()
