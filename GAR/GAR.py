@@ -159,15 +159,34 @@ class GAR(tf.keras.Model):
         
         return [g_loss, sim_loss]
 
+    # ... (previous imports and class definition remain unchanged)
+
     def get_item_emb(self, content, item_emb, warm_item, cold_item):
-        out_emb = np.copy(item_emb)
-        # Validate cold_item indices using class attribute num_user
-        valid_cold_indices = cold_item[(cold_item - self.num_user) < len(content)]
+        out_emb = np.copy(item_emb)  # Shape matches item_emb (72147)
+        # Validate cold_item indices against content_data size (93756)
+        valid_content_indices = (cold_item - self.num_user)  # Original indices [0, 93754]
+        valid_mask = (valid_content_indices >= 0) & (valid_content_indices < len(content))
+        valid_cold_indices = cold_item[valid_mask]
+        
         if len(valid_cold_indices) > 0:
-            out_emb[valid_cold_indices] = self.build_generator(content[cold_item - self.num_user], training=False).numpy()
+            # Ensure indexing into content_data (93756) and out_emb (72147) aligns
+            content_indices = valid_content_indices[valid_mask]
+            if np.any(content_indices >= len(content)):
+                print(f"Warning: Invalid content indices detected: {content_indices[content_indices >= len(content)]}")
+                content_indices = content_indices[content_indices < len(content)]
+                valid_cold_indices = valid_cold_indices[content_indices < len(content)]
+            out_emb[valid_cold_indices] = self.build_generator(content[content_indices], training=False).numpy()
         else:
             print("Warning: No valid cold items. Using warm items or original embeddings.")
+        
+        # Ensure out_emb indices are within item_emb bounds (72147)
+        valid_out_emb_indices = valid_cold_indices[valid_cold_indices < len(out_emb)]
+        if len(valid_out_emb_indices) > 0 and len(valid_out_emb_indices) != len(valid_cold_indices):
+            print(f"Warning: Adjusted {len(valid_cold_indices) - len(valid_out_emb_indices)} indices out of bounds for item_emb.")
+        
         return self.build_discriminator(out_emb, out_emb, training=False).numpy()
+
+# ... (rest of the class remains unchanged)
 
     def get_user_emb(self, user_emb):
         return self.build_discriminator(user_emb, user_emb, training=False).numpy()  # Simplified
