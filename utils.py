@@ -15,7 +15,7 @@ class Timer:
     def logging(self, content):
         print(f"{self.name}: {content}")
 
-def bpr_neg_samp(users, item_num, user_dict, warm_item):
+def bpr_neg_samp(users, item_num, user_dict, warm_item, num_user):
     train_data = []
     for u in users:
         pos_items = user_dict.get(u, [])
