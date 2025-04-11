@@ -80,14 +80,19 @@ class GAR(tf.keras.Model):
         
         with tf.GradientTape() as tape:
             d_out = self.build_discriminator(uemb, iemb, training=True)
+            print("d_out shape:", d_out.shape)
             d_out = tf.reshape(d_out, [3, -1])
+            print("d_out reshaped:", d_out.shape)
             real_logit = d_out[:, 0]
             neg_logit = d_out[:, 1]
             d_fake_logit = d_out[:, 2]
+            print("real_logit shape:", real_logit.shape)
+            print("neg_logit shape:", neg_logit.shape)
+            print("d_fake_logit shape:", d_fake_logit.shape)
             d_loss_base = tf.nn.sigmoid_cross_entropy_with_logits(
                 logits=real_logit - (1 - self.beta) * d_fake_logit - self.beta * neg_logit,
                 labels=tf.ones_like(real_logit))
-            
+            print("d_loss_base shape:", d_loss_base.shape)
             # Group-wise loss
             d_group_losses = [tf.reduce_mean(tf.boolean_mask(d_loss_base, tf.equal(batch_group_ids, j)))
                               for j in range(self.K)]
