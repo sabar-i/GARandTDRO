@@ -191,7 +191,7 @@ item_index = np.arange(item_node_num)
 
 timer.logging("Training model...")
 for epoch in range(1, args.max_epoch + 1):
-    train_input = utils.bpr_neg_samp(para_dict['warm_user'], item_node_num, para_dict['emb_user_nb'], para_dict['warm_item'])
+    train_input = utils.bpr_neg_samp(para_dict['warm_user'], item_node_num, para_dict['emb_user_nb'], para_dict['warm_item'], num_user)
     # Debug: Check train_input shape and content
     print(f"train_input shape: {train_input.shape}, sample: {train_input[:5]}")
     if train_input.size > 0:
