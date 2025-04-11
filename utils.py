@@ -22,7 +22,7 @@ def bpr_neg_samp(users, item_num, user_dict, warm_item):
         for pos_i in pos_items:
             while True:
                 neg_id = np.random.randint(0, item_num)  # Ensure within item_num
-                if neg_id not in pos_items and neg_id not in warm_item:
+                if neg_id not in pos_items and neg_id not in warm_item and 0 <= neg_id < item_num:
                     break
             train_data.append([u, pos_i, neg_id])  # [user_id, positive_item, negative_item]
     return np.array(train_data, dtype=np.int64)
