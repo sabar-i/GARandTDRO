@@ -190,8 +190,9 @@ item_index = np.arange(item_node_num)
 
 timer.logging("Training model...")
 for epoch in range(1, args.max_epoch + 1):
-    train_input = utils.bpr_neg_samp(para_dict['warm_user'], len(interactions), para_dict['emb_user_nb'], para_dict['warm_item'])
-    # Debug: Check train_input for invalid indices
+    train_input = utils.bpr_neg_samp(para_dict['warm_user'], item_node_num, para_dict['emb_user_nb'], para_dict['warm_item'])
+    # Debug: Check train_input shape and content
+    print(f"train_input shape: {train_input.shape}, sample: {train_input[:5]}")
     if train_input.size > 0:
         invalid_indices = np.any((train_input < 0) | (train_input >= item_node_num), axis=1)
         if np.any(invalid_indices):
@@ -203,6 +204,10 @@ for epoch in range(1, args.max_epoch + 1):
         batch_count += 1
         t_train_begin = time.time()
         batch_lbs = train_input[beg:end]
+        # Validate and clip batch_lbs shape
+        if batch_lbs.shape[1] < 3:
+            print(f"Warning: batch_lbs has shape {batch_lbs.shape}, expected at least 3 columns. Padding with zeros.")
+            batch_lbs = np.pad(batch_lbs, ((0, 0), (0, 3 - batch_lbs.shape[1])), mode='constant')
         # Clip or validate item indices to prevent out-of-bounds errors
         batch_lbs[:, 1] = np.clip(batch_lbs[:, 1], 0, item_node_num - 1)  # Positive items
         batch_lbs[:, 2] = np.clip(batch_lbs[:, 2], 0, item_node_num - 1)  # Negative items
