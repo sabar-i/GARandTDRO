@@ -75,24 +75,26 @@ class GAR(tf.keras.Model):
     @tf.function
     def train_d(self, batch_uemb, batch_iemb, batch_neg_iemb, batch_content, batch_group_ids, period_grads):
         gen_emb = self.build_generator(batch_content, training=True)
-        uemb = tf.tile(batch_uemb, [3, 1])
-        iemb = tf.concat([batch_iemb, batch_neg_iemb, gen_emb], axis=0)
+        uemb = tf.tile(batch_uemb, [3, 1])  # [3072, emb_dim]
+        iemb = tf.concat([batch_iemb, batch_neg_iemb, gen_emb], axis=0)  # [3072, emb_dim]
         
         with tf.GradientTape() as tape:
-            d_out = self.build_discriminator(uemb, iemb, training=True)
-            print("d_out shape:", d_out.shape)
-            d_out = tf.reshape(d_out, [3, -1])
-            print("d_out reshaped:", d_out.shape)
-            real_logit = d_out[:, 0]
-            neg_logit = d_out[:, 1]
-            d_fake_logit = d_out[:, 2]
-            print("real_logit shape:", real_logit.shape)
-            print("neg_logit shape:", neg_logit.shape)
-            print("d_fake_logit shape:", d_fake_logit.shape)
+            d_out = self.build_discriminator(uemb, iemb, training=True)  # [3072,]
+            batch_size = tf.shape(batch_uemb)[0]  # 1024
+            real_logit = d_out[:batch_size]  # [1024,]
+            neg_logit = d_out[batch_size:2*batch_size]  # [1024,]
+            d_fake_logit = d_out[2*batch_size:3*batch_size]  # [1024,]
+            
             d_loss_base = tf.nn.sigmoid_cross_entropy_with_logits(
                 logits=real_logit - (1 - self.beta) * d_fake_logit - self.beta * neg_logit,
-                labels=tf.ones_like(real_logit))
-            print("d_loss_base shape:", d_loss_base.shape)
+                labels=tf.ones_like(real_logit)
+            )  # [1024,]
+            
+            # Group-wise loss
+            d_group_losses = [tf.reduce_mean(tf.boolean_mask(d_loss_base, tf.equal(batch_group_ids, j)))
+                              for j in range(self.K)]
+            d_loss = tf.reduce_mean(d_loss_base) + tf.reduce_sum(self.losses)
+        
             # Group-wise loss
             d_group_losses = [tf.reduce_mean(tf.boolean_mask(d_loss_base, tf.equal(batch_group_ids, j)))
                               for j in range(self.K)]
