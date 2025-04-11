@@ -91,13 +91,10 @@ validation_warm_dict = remap_items_dict(validation_warm_dict)
 testing_cold_dict = remap_items_dict(testing_cold_dict)
 testing_warm_dict = remap_items_dict(testing_warm_dict)
 
-user_node_num = len(user_map) + 1
-item_node_num = len(item_map) + 1
-user_emb = emb[:user_node_num]
-item_emb = emb[user_node_num:user_node_num + item_node_num]
+# Validate para_dict before passing to bpr_neg_samp
 para_dict = {
-    'user_array': np.arange(user_node_num - 1),
-    'item_array': np.arange(item_node_num - 1),
+    'user_array': np.arange(len(user_map)),
+    'item_array': np.arange(len(item_map)),
     'warm_item': warm_items,
     'cold_item': cold_items,
     'warm_user': np.array(list(training_dict.keys())),
@@ -112,6 +109,11 @@ para_dict = {
     'hybrid_test_user': np.array(list(testing_warm_dict.keys()) + list(testing_cold_dict.keys())),
     'hybrid_test_user_nb': {**testing_warm_dict, **testing_cold_dict}
 }
+
+user_node_num = len(user_map) + 1
+item_node_num = len(item_map) + 1
+user_emb = emb[:user_node_num]
+item_emb = emb[user_node_num:user_node_num + item_node_num]
 timer.logging('Data loaded from {}'.format(data_dir))
 
 # TDRO Preprocessing
@@ -189,15 +191,24 @@ item_index = np.arange(item_node_num)
 timer.logging("Training model...")
 for epoch in range(1, args.max_epoch + 1):
     train_input = utils.bpr_neg_samp(para_dict['warm_user'], len(interactions), para_dict['emb_user_nb'], para_dict['warm_item'])
-    n_batch = len(train_input) // args.batch_size
+    # Debug: Check train_input for invalid indices
+    if train_input.size > 0:
+        invalid_indices = np.any((train_input < 0) | (train_input >= item_node_num), axis=1)
+        if np.any(invalid_indices):
+            print(f"Warning: Invalid indices found in train_input: {train_input[invalid_indices]}")
+            train_input = train_input[~invalid_indices]  # Filter out invalid indices
+    n_batch = len(train_input) // args.batch_size if len(train_input) > 0 else 0
     for beg in range(0, len(train_input) - args.batch_size, args.batch_size):
         end = beg + args.batch_size
         batch_count += 1
         t_train_begin = time.time()
         batch_lbs = train_input[beg:end]
         # Clip or validate item indices to prevent out-of-bounds errors
-        batch_lbs[:, 1] = np.clip(batch_lbs[:, 1], 0, item_node_num - 1)  # Ensure indices are within bounds
-        batch_lbs[:, 2] = np.clip(batch_lbs[:, 2], 0, item_node_num - 1)  # Same for negative samples
+        batch_lbs[:, 1] = np.clip(batch_lbs[:, 1], 0, item_node_num - 1)  # Positive items
+        batch_lbs[:, 2] = np.clip(batch_lbs[:, 2], 0, item_node_num - 1)  # Negative items
+        # Debug: Verify clipped indices
+        if np.any(batch_lbs[:, 1] >= item_node_num) or np.any(batch_lbs[:, 2] >= item_node_num):
+            print(f"Warning: Clipping failed for batch_lbs: {batch_lbs[batch_lbs[:, 1] >= item_node_num]}")
         batch_group_ids = np.array([group_map.get(int(item), 0) for item in batch_lbs[:, 1]])
         period_grads = np.zeros(model.emb_dim)
 
