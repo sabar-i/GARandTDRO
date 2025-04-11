@@ -160,8 +160,12 @@ class GAR(tf.keras.Model):
 
     def get_item_emb(self, content, item_emb, warm_item, cold_item):
         out_emb = np.copy(item_emb)
-        out_emb[cold_item] = self.build_generator(content[cold_item], training=False).numpy()
-        return self.build_discriminator(out_emb, out_emb, training=False).numpy()  # Simplified
+        valid_cold_indices = cold_item[(cold_item - num_user) < len(content)]  # Adjust for offset
+        if len(valid_cold_indices) > 0:
+            out_emb[valid_cold_indices] = self.build_generator(content[cold_item - num_user], training=False).numpy()
+        else:
+            print("Warning: No valid cold items. Using warm items or original embeddings.")
+        return self.build_discriminator(out_emb, out_emb, training=False).numpy()
 
     def get_user_emb(self, user_emb):
         return self.build_discriminator(user_emb, user_emb, training=False).numpy()  # Simplified
