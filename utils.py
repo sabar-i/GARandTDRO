@@ -16,13 +16,13 @@ class Timer:
         print(f"{self.name}: {content}")
 
 def bpr_neg_samp(users, item_num, user_dict, warm_item):
-    neg_items = []
+    train_data = []
     for u in users:
         pos_items = user_dict.get(u, [])
-        for _ in range(len(pos_items)):
+        for pos_i in pos_items:
             while True:
                 neg_id = np.random.randint(0, item_num)  # Ensure within item_num
                 if neg_id not in pos_items and neg_id not in warm_item:
                     break
-            neg_items.append(neg_id)
-    return np.array(neg_items).reshape(-1, 1)
+            train_data.append([u, pos_i, neg_id])  # [user_id, positive_item, negative_item]
+    return np.array(train_data, dtype=np.int64)
