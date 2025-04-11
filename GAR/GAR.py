@@ -24,6 +24,7 @@ class GAR(tf.keras.Model):
         self.mu = 0.2
         self.alpha = args.alpha  # 0.5
         self.beta = args.beta   # 0.6
+        self.num_user = 21607  # Added as a class attribute for Amazon dataset
 
         # Generator layers
         self.g_layers = [tf.keras.layers.Dense(units, activation=self.g_act,
@@ -160,9 +161,10 @@ class GAR(tf.keras.Model):
 
     def get_item_emb(self, content, item_emb, warm_item, cold_item):
         out_emb = np.copy(item_emb)
-        valid_cold_indices = cold_item[(cold_item - num_user) < len(content)]  # Adjust for offset
+        # Validate cold_item indices using class attribute num_user
+        valid_cold_indices = cold_item[(cold_item - self.num_user) < len(content)]
         if len(valid_cold_indices) > 0:
-            out_emb[valid_cold_indices] = self.build_generator(content[cold_item - num_user], training=False).numpy()
+            out_emb[valid_cold_indices] = self.build_generator(content[cold_item - self.num_user], training=False).numpy()
         else:
             print("Warning: No valid cold items. Using warm items or original embeddings.")
         return self.build_discriminator(out_emb, out_emb, training=False).numpy()
@@ -176,3 +178,9 @@ class GAR(tf.keras.Model):
     def get_ranked_rating(self, ratings, k):
         top_score, top_item_index = tf.nn.top_k(ratings, k=k)
         return top_score.numpy(), top_item_index.numpy()
+
+    def save_weights(self, filepath):
+        self.save_weights(filepath)
+
+    def load_weights(self, filepath):
+        self.load_weights(filepath)
