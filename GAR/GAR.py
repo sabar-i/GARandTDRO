@@ -120,31 +120,34 @@ class GAR(tf.keras.Model):
 
     @tf.function
     def train_g(self, batch_uemb, batch_iemb, batch_content, batch_group_ids, period_grads):
+        period_grads_broadcast = tf.reshape(period_grads, [self.emb_dim, 1])  # Reshape to [128, 1] for broadcasting
+    
         with tf.GradientTape() as tape:
             gen_emb = self.build_generator(batch_content, training=True)
             g_out = self.build_discriminator(batch_uemb, gen_emb, training=True)
             d_out = self.build_discriminator(batch_uemb, batch_iemb, training=True)
             g_loss_base = (1.0 - self.alpha) * tf.nn.sigmoid_cross_entropy_with_logits(
-                logits=g_out - d_out, labels=tf.ones_like(g_out))
+                logits=g_out - d_out, labels=tf.ones_like(g_out)
+            )
             sim_loss = self.alpha * tf.reduce_mean(tf.abs(gen_emb - batch_iemb))
             
             # Group-wise loss
             g_group_losses = [tf.reduce_mean(tf.boolean_mask(g_loss_base, tf.equal(batch_group_ids, j)))
                               for j in range(self.K)]
             g_loss = tf.reduce_mean(g_loss_base) + sim_loss + tf.reduce_sum(self.losses)
-
+    
             # TDRO update
             scores = []
             g_vars = self.trainable_variables
             for j in range(self.K):
                 g_j = tf.gradients(g_group_losses[j], g_vars)[0]
-                shift = tf.reduce_sum(g_j * period_grads) if g_j is not None else 0.0
+                shift = tf.reduce_sum(g_j * period_grads_broadcast) if g_j is not None else 0.0
                 score = (1 - self.lambda_) * g_group_losses[j] + self.lambda_ * shift
                 scores.append(score)
             scores = tf.stack(scores)
             w_new = tf.nn.softmax(tf.math.log(self.group_weights + 1e-9) + self.eta_w * scores)
             self.group_weights.assign(w_new)
-
+    
         grads = tape.gradient(g_loss, self.trainable_variables)
         self.g_optimizer.apply_gradients(zip(grads, self.trainable_variables))
         
