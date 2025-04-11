@@ -74,9 +74,15 @@ content_size = len(content_data) - 1  # 93755 (excluding zero row)
 warm_items = np.array([i + num_user for i in warm_items_set if 0 <= i <= max_valid_index], dtype=np.int64)
 cold_items = np.array([i + num_user for i in cold_items_set if 0 <= i <= max_valid_index], dtype=np.int64)
 
-# Additional validation: Ensure mapped indices are within content_data bounds
+# Additional validation: Ensure mapped indices are within content_data and item_emb bounds
 warm_items = warm_items[(warm_items - num_user) < content_size]
 cold_items = cold_items[(cold_items - num_user) < content_size]
+item_emb_size = len(item_emb) - 1  # 72146
+warm_items = warm_items[warm_items <= num_user + item_emb_size]
+cold_items = cold_items[cold_items <= num_user + item_emb_size]
+
+print(f"Final warm_items: {warm_items[:10]} (length: {len(warm_items)}, max: {warm_items.max()})")
+print(f"Final cold_items: {cold_items[:10]} (length: {len(cold_items)}, max: {cold_items.max()})")
 
 # Debug output to verify
 print(f"Raw warm_items_set: {warm_items_set[:10] if len(warm_items_set) > 0 else [warm_items_set]}")
