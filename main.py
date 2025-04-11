@@ -60,20 +60,22 @@ cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_i
 print(f"warm_items_raw type: {type(warm_items_raw)}, content: {warm_items_set if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
 print(f"item_map type: {type(item_map)}, first 10 keys: {list(item_map.keys())[:10]}")
 
-# Map warm_items and cold_items assuming raw contains mapped indices
-max_valid_index = len(item_map)  # 72146
-warm_items = np.array([i for i in warm_items_set if 0 <= int(i) < max_valid_index], dtype=np.int64)
-cold_items = np.array([i for i in cold_items_set if 0 <= int(i) < max_valid_index], dtype=np.int64)
+# Apply CLCRec+TDRO offset (num_user = 21607 for Amazon)
+num_user = 21607
+num_item = 93755  # From CLCRec+TDRO Amazon config
+max_valid_index = num_item - 1  # 93754
+warm_items = np.array([i + num_user for i in warm_items_set if 0 <= i < max_valid_index], dtype=np.int64)
+cold_items = np.array([i + num_user for i in cold_items_set if 0 <= i < max_valid_index], dtype=np.int64)
 
 # Debug: Check mapping results
 print(f"Mapped warm_items: {warm_items[:10]} (length: {len(warm_items)})")
 if len(warm_items) == 0:
     print(f"Warning: warm_items is empty after mapping. Raw items: {list(warm_items_set)[:10] if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
-    warm_items = np.array([0])  # Fallback to first item
+    warm_items = np.array([num_user])  # Fallback to first offset item
 elif len(warm_items) < 3:
     print(f"Warning: warm_items has {len(warm_items)} samples, less than n_clusters=3. Using all available.")
 
-# Load and remap training_dict and other dictionaries
+# Load and remap training_dict and other dictionaries with offset
 training_dict = np.load(os.path.join(data_dir, 'training_dict.npy'), allow_pickle=True).item()
 validation_cold_dict = np.load(os.path.join(data_dir, 'validation_cold_dict.npy'), allow_pickle=True).item()
 validation_warm_dict = np.load(os.path.join(data_dir, 'validation_warm_dict.npy'), allow_pickle=True).item()
@@ -82,8 +84,7 @@ testing_warm_dict = np.load(os.path.join(data_dir, 'testing_warm_dict.npy'), all
 interaction_timestamp_dict = np.load(os.path.join(data_dir, 'interaction_timestamp_dict.npy'), allow_pickle=True).item()
 
 def remap_items_dict(dict_data):
-    max_valid_index = len(item_map)
-    return {k: [i for i in v if 0 <= int(i) < max_valid_index] for k, v in dict_data.items()}
+    return {k: [i + num_user for i in v if 0 <= i < max_valid_index] for k, v in dict_data.items()}
 
 training_dict = remap_items_dict(training_dict)
 validation_cold_dict = remap_items_dict(validation_cold_dict)
@@ -94,7 +95,7 @@ testing_warm_dict = remap_items_dict(testing_warm_dict)
 # Validate para_dict before passing to bpr_neg_samp
 para_dict = {
     'user_array': np.arange(len(user_map)),
-    'item_array': np.arange(len(item_map)),
+    'item_array': np.arange(num_user, num_user + num_item),
     'warm_item': warm_items,
     'cold_item': cold_items,
     'warm_user': np.array(list(training_dict.keys())),
@@ -111,7 +112,7 @@ para_dict = {
 }
 
 user_node_num = len(user_map) + 1
-item_node_num = len(item_map) + 1
+item_node_num = num_user + num_item  # 115361 for Amazon
 user_emb = emb[:user_node_num]
 item_emb = emb[user_node_num:user_node_num + item_node_num]
 timer.logging('Data loaded from {}'.format(data_dir))
@@ -119,7 +120,7 @@ timer.logging('Data loaded from {}'.format(data_dir))
 # TDRO Preprocessing
 K = 3
 E = 3
-warm_features = content_data[warm_items]
+warm_features = content_data[warm_items - num_user]  # Adjust for original IDs
 if len(warm_features) == 0:
     print("Warning: warm_features is empty. Skipping clustering or using fallback.")
     group_labels = np.zeros(len(warm_items), dtype=int)  # Fallback: assign all to cluster 0
@@ -194,11 +195,10 @@ for epoch in range(1, args.max_epoch + 1):
     # Debug: Check train_input shape and content
     print(f"train_input shape: {train_input.shape}, sample: {train_input[:5]}")
     if train_input.size > 0:
-        invalid_indices = np.any((train_input < 0) | (train_input >= item_node_num), axis=1)
+        invalid_indices = np.any((train_input < num_user) | (train_input >= item_node_num), axis=1)
         if np.any(invalid_indices):
             print(f"Warning: Invalid indices found in train_input: {train_input[invalid_indices]}")
             train_input = train_input[~invalid_indices]  # Filter out invalid indices
-        # Ensure train_input has at least 3 columns
         if train_input.shape[1] < 3:
             print(f"Warning: train_input has {train_input.shape[1]} columns, expected 3. Padding with zeros.")
             train_input = np.pad(train_input, ((0, 0), (0, 3 - train_input.shape[1])), mode='constant')
@@ -209,17 +209,17 @@ for epoch in range(1, args.max_epoch + 1):
         t_train_begin = time.time()
         batch_lbs = train_input[beg:end]
         # Clip or validate item indices to prevent out-of-bounds errors
-        batch_lbs[:, 1] = np.clip(batch_lbs[:, 1], 0, item_node_num - 1)  # Positive items
-        batch_lbs[:, 2] = np.clip(batch_lbs[:, 2], 0, item_node_num - 1)  # Negative items
+        batch_lbs[:, 1] = np.clip(batch_lbs[:, 1], num_user, item_node_num - 1)  # Positive items
+        batch_lbs[:, 2] = np.clip(batch_lbs[:, 2], num_user, item_node_num - 1)  # Negative items
         # Debug: Verify clipped indices
         if np.any(batch_lbs[:, 1] >= item_node_num) or np.any(batch_lbs[:, 2] >= item_node_num):
             print(f"Warning: Clipping failed for batch_lbs: {batch_lbs[batch_lbs[:, 1] >= item_node_num]}")
         batch_group_ids = np.array([group_map.get(int(item), 0) for item in batch_lbs[:, 1]])
         period_grads = np.zeros(model.emb_dim)
 
-        d_loss = model.train_d(user_emb[batch_lbs[:, 0]], item_emb[batch_lbs[:, 1]], item_emb[batch_lbs[:, 2]],
-                               content_data[batch_lbs[:, 1]], batch_group_ids, period_grads)
-        g_loss = model.train_g(user_emb[batch_lbs[:, 0]], item_emb[batch_lbs[:, 1]], content_data[batch_lbs[:, 1]],
+        d_loss = model.train_d(user_emb[batch_lbs[:, 0]], item_emb[batch_lbs[:, 1] - num_user], item_emb[batch_lbs[:, 2] - num_user],
+                               content_data[batch_lbs[:, 1] - num_user], batch_group_ids, period_grads)
+        g_loss = model.train_g(user_emb[batch_lbs[:, 0]], item_emb[batch_lbs[:, 1] - num_user], content_data[batch_lbs[:, 1] - num_user],
                                batch_group_ids, period_grads)
         loss = sum(d_loss + g_loss)
         t_train_end = time.time()
