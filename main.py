@@ -1,3 +1,4 @@
+
 # main.py
 import os
 from metric import ndcg
@@ -210,7 +211,7 @@ for epoch in range(1, args.max_epoch + 1):
         t_train_begin = time.time()
         batch_lbs = train_input[beg:end]
         batch_group_ids = np.array([group_map.get(int(item), 0) for item in batch_lbs[:, 1]])
-        period_grads = np.zeros(model.emb_dim)
+        period_grads = np.zeros(model.emb_dim, dtype=np.float32)
 
         # Access embeddings safely
         d_loss = model.train_d(user_emb[batch_lbs[:, 0]], 
