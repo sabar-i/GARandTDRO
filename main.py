@@ -198,16 +198,16 @@ for epoch in range(1, args.max_epoch + 1):
         if np.any(invalid_indices):
             print(f"Warning: Invalid indices found in train_input: {train_input[invalid_indices]}")
             train_input = train_input[~invalid_indices]  # Filter out invalid indices
+        # Ensure train_input has at least 3 columns
+        if train_input.shape[1] < 3:
+            print(f"Warning: train_input has {train_input.shape[1]} columns, expected 3. Padding with zeros.")
+            train_input = np.pad(train_input, ((0, 0), (0, 3 - train_input.shape[1])), mode='constant')
     n_batch = len(train_input) // args.batch_size if len(train_input) > 0 else 0
     for beg in range(0, len(train_input) - args.batch_size, args.batch_size):
         end = beg + args.batch_size
         batch_count += 1
         t_train_begin = time.time()
         batch_lbs = train_input[beg:end]
-        # Validate and clip batch_lbs shape
-        if batch_lbs.shape[1] < 3:
-            print(f"Warning: batch_lbs has shape {batch_lbs.shape}, expected at least 3 columns. Padding with zeros.")
-            batch_lbs = np.pad(batch_lbs, ((0, 0), (0, 3 - batch_lbs.shape[1])), mode='constant')
         # Clip or validate item indices to prevent out-of-bounds errors
         batch_lbs[:, 1] = np.clip(batch_lbs[:, 1], 0, item_node_num - 1)  # Positive items
         batch_lbs[:, 2] = np.clip(batch_lbs[:, 2], 0, item_node_num - 1)  # Negative items
