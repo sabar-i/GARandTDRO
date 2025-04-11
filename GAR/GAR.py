@@ -162,27 +162,26 @@ class GAR(tf.keras.Model):
     # ... (previous imports and class definition remain unchanged)
 
     def get_item_emb(self, content, item_emb, warm_item, cold_item):
-        out_emb = np.copy(item_emb)  # Shape matches item_emb (72147)
+        out_emb = np.copy(item_emb)  # Size matches item_emb (72147)
         # Validate cold_item indices against content_data size (93756)
-        valid_content_indices = (cold_item - self.num_user)  # Original indices [0, 93754]
+        valid_content_indices = cold_item - self.num_user  # Original indices [0, 93754]
         valid_mask = (valid_content_indices >= 0) & (valid_content_indices < len(content))
         valid_cold_indices = cold_item[valid_mask]
         
+        # Further validate against out_emb size (72147)
+        valid_out_emb_mask = valid_cold_indices < (self.num_user + len(out_emb))
+        valid_cold_indices = valid_cold_indices[valid_out_emb_mask]
+        content_indices = valid_content_indices[valid_mask][valid_out_emb_mask]
+        
         if len(valid_cold_indices) > 0:
-            # Ensure indexing into content_data (93756) and out_emb (72147) aligns
-            content_indices = valid_content_indices[valid_mask]
             if np.any(content_indices >= len(content)):
                 print(f"Warning: Invalid content indices detected: {content_indices[content_indices >= len(content)]}")
                 content_indices = content_indices[content_indices < len(content)]
                 valid_cold_indices = valid_cold_indices[content_indices < len(content)]
+            print(f"Assigning to out_emb at indices: {valid_cold_indices[:10]} (size: {len(out_emb)})")
             out_emb[valid_cold_indices] = self.build_generator(content[content_indices], training=False).numpy()
         else:
             print("Warning: No valid cold items. Using warm items or original embeddings.")
-        
-        # Ensure out_emb indices are within item_emb bounds (72147)
-        valid_out_emb_indices = valid_cold_indices[valid_cold_indices < len(out_emb)]
-        if len(valid_out_emb_indices) > 0 and len(valid_out_emb_indices) != len(valid_cold_indices):
-            print(f"Warning: Adjusted {len(valid_cold_indices) - len(valid_out_emb_indices)} indices out of bounds for item_emb.")
         
         return self.build_discriminator(out_emb, out_emb, training=False).numpy()
 
