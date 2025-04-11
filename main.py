@@ -182,6 +182,7 @@ save_file = save_path + param_file
 args.param_file = param_file
 
 # Training loop
+# Training loop
 patience_count = 0
 va_metric_max = 0
 train_time = 0
@@ -192,41 +193,42 @@ item_index = np.arange(item_node_num)
 timer.logging("Training model...")
 for epoch in range(1, args.max_epoch + 1):
     train_input = utils.bpr_neg_samp(para_dict['warm_user'], item_node_num, para_dict['emb_user_nb'], para_dict['warm_item'], num_user)
-    # Debug: Check train_input shape and content
     print(f"train_input shape: {train_input.shape}, sample: {train_input[:5]}")
     if train_input.size > 0:
-        # Validate ranges: user IDs [0, num_user-1], item IDs [num_user, item_node_num-1]
-        invalid_users = np.any((train_input[:, 0] < 0) | (train_input[:, 0] >= num_user), axis=0)
-        invalid_items = np.any((train_input[:, 1:] < num_user) | (train_input[:, 1:] >= item_node_num), axis=1)
-        invalid_indices = invalid_users | invalid_items
-        if np.any(invalid_indices):
-            print(f"Warning: Invalid indices found in train_input: {train_input[invalid_indices]}")
-            train_input = train_input[~invalid_indices]  # Filter out invalid indices
-        if train_input.shape[1] < 3:
-            print(f"Warning: train_input has {train_input.shape[1]} columns, expected 3. Padding with zeros.")
-            train_input = np.pad(train_input, ((0, 0), (0, 3 - train_input.shape[1])), mode='constant')
+        # Filter out items exceeding item_emb size
+        max_item_index = len(item_emb) - 1  # 72146
+        valid_items = (train_input[:, 1] - num_user <= max_item_index) & (train_input[:, 2] - num_user <= max_item_index)
+        train_input = train_input[valid_items]
+        print(f"After filtering, train_input shape: {train_input.shape}")
+        if train_input.size == 0:
+            print("Error: No valid training samples after filtering. Check data consistency.")
+            break
     n_batch = len(train_input) // args.batch_size if len(train_input) > 0 else 0
     for beg in range(0, len(train_input) - args.batch_size, args.batch_size):
         end = beg + args.batch_size
         batch_count += 1
         t_train_begin = time.time()
         batch_lbs = train_input[beg:end]
-        # Clip or validate item indices to prevent out-of-bounds errors
-        batch_lbs[:, 1] = np.clip(batch_lbs[:, 1], num_user, item_node_num - 1)  # Positive items
-        batch_lbs[:, 2] = np.clip(batch_lbs[:, 2], num_user, item_node_num - 1)  # Negative items
-        # Debug: Verify clipped indices
-        if np.any(batch_lbs[:, 1] >= item_node_num) or np.any(batch_lbs[:, 2] >= item_node_num):
-            print(f"Warning: Clipping failed for batch_lbs: {batch_lbs[batch_lbs[:, 1] >= item_node_num]}")
         batch_group_ids = np.array([group_map.get(int(item), 0) for item in batch_lbs[:, 1]])
         period_grads = np.zeros(model.emb_dim)
 
-        d_loss = model.train_d(user_emb[batch_lbs[:, 0]], item_emb[batch_lbs[:, 1] - num_user], item_emb[batch_lbs[:, 2] - num_user],
-                               content_data[batch_lbs[:, 1] - num_user], batch_group_ids, period_grads)
-        g_loss = model.train_g(user_emb[batch_lbs[:, 0]], item_emb[batch_lbs[:, 1] - num_user], content_data[batch_lbs[:, 1] - num_user],
-                               batch_group_ids, period_grads)
+        # Access embeddings safely
+        d_loss = model.train_d(user_emb[batch_lbs[:, 0]], 
+                              item_emb[batch_lbs[:, 1] - num_user], 
+                              item_emb[batch_lbs[:, 2] - num_user],
+                              content_data[batch_lbs[:, 1] - num_user], 
+                              batch_group_ids, 
+                              period_grads)
+        g_loss = model.train_g(user_emb[batch_lbs[:, 0]], 
+                              item_emb[batch_lbs[:, 1] - num_user], 
+                              content_data[batch_lbs[:, 1] - num_user],
+                              batch_group_ids, 
+                              period_grads)
         loss = sum(d_loss + g_loss)
         t_train_end = time.time()
         train_time += t_train_end - t_train_begin
+
+        # Validation logic remains the same...
 
         if (batch_count % int(n_batch * args.val_interval) == 0) and (epoch >= args.val_start):
             t_val_begin = time.time()
