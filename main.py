@@ -60,12 +60,10 @@ cold_items_set = cold_items_raw.item() if cold_items_raw.shape == () else cold_i
 print(f"warm_items_raw type: {type(warm_items_raw)}, content: {warm_items_set if hasattr(warm_items_set, '__len__') else [warm_items_set]}")
 print(f"item_map type: {type(item_map)}, first 10 keys: {list(item_map.keys())[:10]}")
 
-# Create reverse mapping (mapped index -> original ASIN)
-item_map_reverse = {v: k for k, v in item_map.items()}
-
-# Map warm_items and cold_items using reverse mapping (assuming raw contains mapped indices)
-warm_items = np.array([int(item_map_reverse.get(int(i), 0)) for i in warm_items_set], dtype=np.int64)
-cold_items = np.array([int(item_map_reverse.get(int(i), 0)) for i in cold_items_set], dtype=np.int64)
+# Map warm_items and cold_items assuming raw contains mapped indices
+max_valid_index = len(item_map)  # 72146
+warm_items = np.array([i for i in warm_items_set if 0 <= int(i) < max_valid_index], dtype=np.int64)
+cold_items = np.array([i for i in cold_items_set if 0 <= int(i) < max_valid_index], dtype=np.int64)
 
 # Debug: Check mapping results
 print(f"Mapped warm_items: {warm_items[:10]} (length: {len(warm_items)})")
@@ -84,7 +82,8 @@ testing_warm_dict = np.load(os.path.join(data_dir, 'testing_warm_dict.npy'), all
 interaction_timestamp_dict = np.load(os.path.join(data_dir, 'interaction_timestamp_dict.npy'), allow_pickle=True).item()
 
 def remap_items_dict(dict_data):
-    return {k: [int(item_map_reverse.get(int(i), 0)) for i in v] for k, v in dict_data.items()}
+    max_valid_index = len(item_map)
+    return {k: [i for i in v if 0 <= int(i) < max_valid_index] for k, v in dict_data.items()}
 
 training_dict = remap_items_dict(training_dict)
 validation_cold_dict = remap_items_dict(validation_cold_dict)
