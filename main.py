@@ -195,7 +195,10 @@ for epoch in range(1, args.max_epoch + 1):
     # Debug: Check train_input shape and content
     print(f"train_input shape: {train_input.shape}, sample: {train_input[:5]}")
     if train_input.size > 0:
-        invalid_indices = np.any((train_input < num_user) | (train_input >= item_node_num), axis=1)
+        # Validate ranges: user IDs [0, num_user-1], item IDs [num_user, item_node_num-1]
+        invalid_users = np.any((train_input[:, 0] < 0) | (train_input[:, 0] >= num_user), axis=0)
+        invalid_items = np.any((train_input[:, 1:] < num_user) | (train_input[:, 1:] >= item_node_num), axis=1)
+        invalid_indices = invalid_users | invalid_items
         if np.any(invalid_indices):
             print(f"Warning: Invalid indices found in train_input: {train_input[invalid_indices]}")
             train_input = train_input[~invalid_indices]  # Filter out invalid indices
